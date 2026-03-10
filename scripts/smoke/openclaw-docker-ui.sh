@@ -54,6 +54,8 @@ require_cmd curl
 require_cmd openssl
 require_cmd grep
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
 OPENCLAW_REPO_URL="${OPENCLAW_REPO_URL:-https://github.com/openclaw/openclaw.git}"
 OPENCLAW_DOCKER_DIR="${OPENCLAW_DOCKER_DIR:-/tmp/openclaw-docker}"
 OPENCLAW_REPO_REF="${OPENCLAW_REPO_REF:-v2026.3.2}"
@@ -70,11 +72,9 @@ OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-$(openssl rand -hex 32)}"
 OPENCLAW_BUILD="${OPENCLAW_BUILD:-1}"
 OPENCLAW_WAIT_SECONDS="${OPENCLAW_WAIT_SECONDS:-45}"
 OPENCLAW_OPEN_BROWSER="${OPENCLAW_OPEN_BROWSER:-0}"
-OPENCLAW_SECRETS_FILE="${OPENCLAW_SECRETS_FILE:-$HOME/.secrets}"
 # Keep default one-command UX: local smoke run should not require manual pairing.
 OPENCLAW_DISABLE_DEVICE_AUTH="${OPENCLAW_DISABLE_DEVICE_AUTH:-1}"
-OPENCLAW_MODEL_PRIMARY="${OPENCLAW_MODEL_PRIMARY:-openai/gpt-5.2}"
-OPENCLAW_MODEL_FALLBACK="${OPENCLAW_MODEL_FALLBACK:-openai/gpt-5.2-chat-latest}"
+OPENCLAW_MODEL_PRIMARY="${OPENCLAW_MODEL_PRIMARY:-zai/glm-4.6}"
 OPENCLAW_RESET_STATE="${OPENCLAW_RESET_STATE:-1}"
 PAPERCLIP_HOST_PORT="${PAPERCLIP_HOST_PORT:-3100}"
 PAPERCLIP_HOST_FROM_CONTAINER="${PAPERCLIP_HOST_FROM_CONTAINER:-host.docker.internal}"
@@ -90,15 +90,6 @@ case "$OPENCLAW_DISABLE_DEVICE_AUTH" in
     fail "OPENCLAW_DISABLE_DEVICE_AUTH must be one of: 1,0,true,false,yes,no"
     ;;
 esac
-
-if [[ -z "${OPENAI_API_KEY:-}" && -f "$OPENCLAW_SECRETS_FILE" ]]; then
-  set +u
-  # shellcheck source=/dev/null
-  source "$OPENCLAW_SECRETS_FILE"
-  set -u
-fi
-
-[[ -n "${OPENAI_API_KEY:-}" ]] || fail "OPENAI_API_KEY is required (set env var or include it in $OPENCLAW_SECRETS_FILE)"
 
 log "preparing OpenClaw repo at $OPENCLAW_DOCKER_DIR"
 if [[ -d "$OPENCLAW_DOCKER_DIR/.git" ]]; then
@@ -134,12 +125,14 @@ if [[ "$OPENCLAW_RESET_STATE" == "1" ]]; then
     OPENCLAW_GATEWAY_BIND="$OPENCLAW_GATEWAY_BIND" \
     OPENCLAW_GATEWAY_TOKEN="$OPENCLAW_GATEWAY_TOKEN" \
     OPENCLAW_IMAGE="$OPENCLAW_IMAGE" \
-    OPENAI_API_KEY="$OPENAI_API_KEY" \
     docker compose -f "$OPENCLAW_DOCKER_DIR/docker-compose.yml" down --remove-orphans >/dev/null 2>&1 || true
   reset_openclaw_state_dir "$OPENCLAW_CONFIG_DIR"
 fi
 mkdir -p "$OPENCLAW_WORKSPACE_DIR" "$OPENCLAW_CONFIG_DIR/identity" "$OPENCLAW_CONFIG_DIR/credentials"
 chmod 700 "$OPENCLAW_CONFIG_DIR" "$OPENCLAW_CONFIG_DIR/credentials"
+
+log "copying agents config from $SCRIPT_DIR/agents to $OPENCLAW_CONFIG_DIR/agents"
+cp -R "$SCRIPT_DIR/agents" "$OPENCLAW_CONFIG_DIR/agents"
 
 cat > "$OPENCLAW_CONFIG_DIR/openclaw.json" <<EOF
 {
@@ -160,18 +153,72 @@ cat > "$OPENCLAW_CONFIG_DIR/openclaw.json" <<EOF
       ]
     }
   },
-  "env": {
-    "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "zai": {
+        "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "glm-5",
+            "name": "GLM-5",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          },
+          {
+            "id": "glm-4.7",
+            "name": "GLM-4.7",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          },
+          {
+            "id": "glm-4.7-flash",
+            "name": "GLM-4.7 Flash",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          },
+          {
+            "id": "glm-4.7-flashx",
+            "name": "GLM-4.7 FlashX",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          }
+        ]
+      }
+    }
   },
   "agents": {
     "defaults": {
       "model": {
-        "primary": "${OPENCLAW_MODEL_PRIMARY}",
-        "fallbacks": [
-          "${OPENCLAW_MODEL_FALLBACK}"
-        ]
+        "primary": "${OPENCLAW_MODEL_PRIMARY}"
       },
-      "workspace": "/home/node/.openclaw/workspace"
+      "models": {
+        "zai/glm-5": {
+          "alias": "GLM"
+        },
+        "zai/glm-4.6": {}
+      },
+      "workspace": "/home/node/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
     }
   }
 }
@@ -186,7 +233,6 @@ OPENCLAW_BRIDGE_PORT=$OPENCLAW_BRIDGE_PORT
 OPENCLAW_GATEWAY_BIND=$OPENCLAW_GATEWAY_BIND
 OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN
 OPENCLAW_IMAGE=$OPENCLAW_IMAGE
-OPENAI_API_KEY=$OPENAI_API_KEY
 EOF
 
 COMPOSE_OVERRIDE="${OPENCLAW_DOCKER_DIR}/.paperclip-openclaw.override.yml"
@@ -263,7 +309,7 @@ Pairing:
   No extra env vars are required for the default path.
   (Security tradeoff: enable pairing with OPENCLAW_DISABLE_DEVICE_AUTH=0.)
 Model:
-  ${OPENCLAW_MODEL_PRIMARY} (fallback: ${OPENCLAW_MODEL_FALLBACK})
+  ${OPENCLAW_MODEL_PRIMARY}
 State:
   OPENCLAW_RESET_STATE=$OPENCLAW_RESET_STATE
 Paperclip URL for OpenClaw container:
@@ -296,7 +342,7 @@ Pairing:
     docker compose -f "$OPENCLAW_DOCKER_DIR/docker-compose.yml" -f "$COMPOSE_OVERRIDE" run --rm openclaw-cli devices list
     docker compose -f "$OPENCLAW_DOCKER_DIR/docker-compose.yml" -f "$COMPOSE_OVERRIDE" run --rm openclaw-cli devices approve --latest
 Model:
-  ${OPENCLAW_MODEL_PRIMARY} (fallback: ${OPENCLAW_MODEL_FALLBACK})
+  ${OPENCLAW_MODEL_PRIMARY}
 State:
   OPENCLAW_RESET_STATE=$OPENCLAW_RESET_STATE
 Paperclip URL for OpenClaw container:
