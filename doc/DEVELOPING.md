@@ -300,9 +300,15 @@ Pairing behavior for this smoke script:
 - default `OPENCLAW_DISABLE_DEVICE_AUTH=1` (no Control UI pairing prompt for local smoke; no extra pairing env vars required)
 - set `OPENCLAW_DISABLE_DEVICE_AUTH=0` to require standard device pairing
 
+Provider behavior for this smoke script:
+
+- requires `ZAI_API_KEY` (or `Z_AI_API_KEY`), loaded from env or `~/.secrets` by default
+- override `OPENCLAW_SECRETS_FILE` if you keep local secrets somewhere other than `~/.secrets`
+
 Model behavior for this smoke script:
 
-- defaults to OpenAI models (`openai/gpt-5.2` + OpenAI fallback) so it does not require Anthropic auth by default
+- defaults to `zai/glm-4.6`
+- merges in newer ZAI GLM entries (`zai/glm-5`, `zai/glm-4.7`, `zai/glm-4.7-flash`, `zai/glm-4.7-flashx`) for local experimentation
 
 State behavior for this smoke script:
 
