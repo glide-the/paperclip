@@ -222,6 +222,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@embedded-postgres/darwin-arm64':
+        specifier: 18.1.0-beta.16
+        version: 18.1.0-beta.16
       '@paperclipai/shared':
         specifier: workspace:*
         version: link:../shared
@@ -6999,8 +7002,7 @@ snapshots:
   '@electric-sql/pglite@0.3.15':
     optional: true
 
-  '@embedded-postgres/darwin-arm64@18.1.0-beta.16':
-    optional: true
+  '@embedded-postgres/darwin-arm64@18.1.0-beta.16': {}
 
   '@embedded-postgres/darwin-x64@18.1.0-beta.16':
     optional: true

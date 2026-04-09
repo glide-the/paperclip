@@ -314,7 +314,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         `Injected agent instructions via --append-system-prompt-file ${instructionsFilePath} (with path directive appended)`,
       ]
     : [];
-
+  console.debug(`[paperclip] Starting Claude execution with config: ${JSON.stringify(config)}, context: ${JSON.stringify(context)}`);
   const runtimeConfig = await buildClaudeRuntimeConfig({
     runId,
     agent,
@@ -416,6 +416,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     }
     args.push("--add-dir", skillsDir);
     if (extraArgs.length > 0) args.push(...extraArgs);
+    console.debug(`[paperclip] Running Claude with args: ${args.join(" ")}`);
     return args;
   };
 
